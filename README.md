@@ -3,7 +3,8 @@
 
 ### Intel Processor Execution Modes
 
-![[Pasted image 20241117000054.png]]
+![[imgs/Pasted image 20241117000054.png]]
+
 
 - **Real Mode**:
 This mode implements the programming environment of the Intel 8086 processor with extensions (such as the ability to switch to protected or system management mode). The processor is placed in real-address mode following power-up or a reset.
