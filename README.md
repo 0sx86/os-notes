@@ -3,7 +3,7 @@
 
 ### Intel Processor Execution Modes
 
-![[imgs/Pasted image 20241117000054.png]]
+![](imgs/20241117000054.png)
 
 
 - **Real Mode**:
