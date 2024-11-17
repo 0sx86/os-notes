@@ -150,3 +150,26 @@ When storing the LDTR or task register (using the SLDT or STR instruction, respe
 
 ![](imgs/20241117143741.png)
 
+### Segment Descriptors
+Each entry in the GDT and LDT is a data structure called a Segment Descriptor. Each Segment Descriptor describes a segment.
+
+Each segment descriptor has an associated segment selector. A segment selector provides the software that uses it with an index into the GDT or LDT (the offset of its associated segment descriptor), a global/local flag (determines whether the selector points to the GDT or the LDT), and access rights information.
+
+![](imgs/20241117183313.png)
+
+To access a byte in a segment, a segment selector and an offset must be supplied. The segment selector provides access to the segment descriptor for the segment (in the GDT or LDT). From the segment descriptor, the processor obtains the base address of the segment in the linear address space. The offset then provides the location of the byte relative to the base address. This mechanism can be used to access any valid code, data, or stack segment, provided the segment is accessible from the current privilege level (CPL) at which the processor is operating. The CPL is defined as the protection level of the currently executing code segment.
+
+The linear address of the base of the GDT is contained in the GDT register (GDTR); the linear address of the LDT is contained in the LDT register (LDTR).
+
+![](imgs/20241117183818.png)
+
+- L Flag (bit 21): Whether this is a 64-bit segment or not (if not, it's Compatibility Mode, which exhibits 32-bit protected mode behavior) => CS.L=1 (64bits) - CS.L=0 (CM)
+
+- Base (32bits): linear address where the segment start, **for Compatibility Mode**. For 64-bit mode, the base is juste always treated as 0 for CS, SS, DS, ES. For FS and GS, the hidden part of the segment registers is mapped into the **IA32_FS_BASE** (0xc0000100) and **IA32_GS_BASE** (0xC0000101) MSRs respectively. So a full 64bit address can be written there instead of in the segment descriptor
+
+- Limit (20bits): size of the segment (in bytes or 4kb blocks), for Compatibility Mode. Limits are not actulaly checked anymore in 64 bit mode, even for FS and GS.
+
+- G Flag: whether the Limit is specified in bytes or 4096 byte chunks, for Compatibility Mode. Not  used in 64-bit mode.
+
+- P Flag: 0 for not present. 1 for present.
+	if this flag is clear, the processor generates a segment-not-present exception (#NP) when a segment selector that points to the segment descriptor is loaded into a segment register
