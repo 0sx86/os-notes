@@ -69,8 +69,18 @@ A segment selector is a 16-bit identifier for a segment (see Figure 3-6). It doe
 
 ![](imgs/20241117041506.png)
 
+It is used to select a different data structure from one of two tables : GDT, LDT. The index is actually 13 bits not 16, so the tables can each hold a maximum of $2^{13} = 8191$ data structures 
 
-![](20241117035402.png)
+
+  
+![](imgs/20241117035402.png)
+
+
+In IA-32e mode of Intel 64 architecture, the effects of segmentation depend on whether the processor is running in compatibility mode or 64-bit mode. In compatibility mode, segmentation functions just as it does using legacy 16-bit or 32-bit protected mode semantics.
+
+In 64-bit mode, segmentation is generally (but not completely) disabled, creating a flat 64-bit linear-address space. The processor treats the segment base of CS, DS, ES, SS as zero, creating a linear address that is equal to the effective address. The FS and GS segments are exceptions. These segment registers (which hold the segment base) can be used as additional base registers in linear address calculations. They facilitate addressing local data
+and certain operating system data structures. 
+Note that the processor does not perform segment limit checks at runtime in 64-bit mode.
 
 - **Basic Flat Model**
 The simplest memory model for a system is the basic “flat model,” in which the operating system and application programs have access to a continuous, unsegmented address space. To the greatest extent possible, this basic flat model hides the segmentation mechanism of the architecture from both the system designer and the application programmer.
@@ -84,3 +94,20 @@ To implement a basic flat memory model with the IA-32 architecture, at least two
 The protected flat model is similar to the basic flat model, except the segment limits are set to include only the range of addresses for which physical memory actually exists (see Figure 3-3). A general-protection exception (#GP) is then generated on any attempt to access nonexistent memory. This model provides a minimum level of hardware protection against some kinds of program bugs.
 
 ![](imgs/20241117035656.png)
+
+**Reading/Writing Segment Registers with MOV**
+![](imgs/20241117042920.png)
+
+**Reading/Writing Segment Registers with PUSH/POP**
+![](imgs/20241117043048.png)
+
+![](imgs/20241117043141.png)
+
+
+Every segment register has a “visible” part and a “hidden” part. (The hidden part is sometimes referred to as a “descriptor cache” or a “shadow register.”) When a segment selector is loaded into the visible part of a segment register, the processor also loads the hidden part of the segment register with the base address, segment limit, and access control information from the segment descriptor pointed to by the segment selector. The information cached in the segment register (visible and hidden) allows the processor to translate addresses without taking extra bus cycles to read the base address and limit from the segment descriptor. In systems in which multiple processors have access to the same descriptor tables, it is the responsibility of software to reload the segment registers when the descriptor tables are modified. If this is not done, an old segment descriptor cached in a segment register might be used after its memory-resident version has been modified.
+
+
+![](imgs/20241117043319.png)
+
+The hidden part is especially used by the segment descriptor (LDT or GDT) to write informations (Base, Limit, => Access <=). 
+Segmentation is not optional, it is still used, but it is used in a much more limited form than what it was originally designed for.
