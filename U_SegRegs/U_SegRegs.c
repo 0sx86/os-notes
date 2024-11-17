@@ -17,7 +17,7 @@
 
 void SelectorPrint(char* regName, unsigned short reg){
  printf("U_SegRegs: %s Register = 0x%02x\n", regName, reg);
- printf("U_SegRegs: %s Register RL = %x, Table Indicator = %s, Index = 0x%04x\n", regName, (reg & 3), ((reg >> 2) & 1) ? "1 (LDT)" : "0 (GDT)", ((reg >> 3) & 0x1FFF)); 
+ printf("U_SegRegs: %s Register RPL = %x, Table Indicator = %s, Index = 0x%04x\n", regName, (reg & 3), ((reg >> 2) & 1) ? "1 (LDT)" : "0 (GDT)", ((reg >> 3) & 0x1FFF)); 
 }
 
 int main(){
