@@ -173,3 +173,72 @@ The linear address of the base of the GDT is contained in the GDT register (GDTR
 
 - P Flag: 0 for not present. 1 for present.
 	if this flag is clear, the processor generates a segment-not-present exception (#NP) when a segment selector that points to the segment descriptor is loaded into a segment register
+
+- S Flag: 0 for System segment. 1 for Code or Data segment
+
+- Type (4bits): Different types for System and non-System (i.e. Code & Data) descriptors. <br> **What was the point of Expand-Down segment ?** => Originally for Stack Segments, to allow for growth towards lower addresses. Although a read-only && expand-down segment can't be used for stack segments... Loading the SS register with a segment generates a general-protection exception (#GP). <br> <br> **Conforming vs Non-Conforming Segments**: Conforming segments allow lower privilege code to execute them (ring 3 code could just jump into Ring 0 conforming segments and keep running). Non-conforming segments behave how you'd expect from a security perspective, and will throw a general protection fault if someone from a lower privilege level tries to execute them
+
+- D/B Flag: used for completely different stuff based on the descriptor type. <br>**Code Segment:** "D" (Default Opcode Size) flag, this is what actually controls whether an overloaded opcode is interpreted as dealing with 16 or 32 but register/memory sizes. The processor fetched a 0x25 in the isntruction stream, how would it know whether it should be followed by 2 bytes (imm16) or 4 bytes (imm32) ? => if the D flag == 0 it's 16bits, and if D == 1 it's 32bits. The instruction prefix 66H can be used to select and operand size other than the default. ![](imgs/20241117234207.png) <br><br>**Stack Segment (data segment pointed to by the SS register):** B (Big) Flag, whether implicit stack pointer usage (e.g. push/pop/call) moves stack pointer by 16 bits (if B is 0), or 32 bits (if B is 1).<br>**Expand-Down Data Segment:** B Flag, 0 = upper bound of 0xFFFF, 1 = upper bound of 0xFFFFFFFF. No one really uses expand down segments ... 
+
+- DPL Flags (2 bits): PRivilege Ring of the segment for access controls. If this is a non-conforming segment descriptor && DPL == 0, only ring 0 code can execute from within this segment. If this i s a data segment selector && DPL == 0, only ring 0 code can read/write data from/to this segment
+
+- Available Flag: No specific usage defined. Available for OSes to use it or not use it as they see fit.
+
+***Other types of descriptors in 64-bit Mode***
+![](imgs/20241117234532.png)
+
+The system segment descriptor for the TSS and the LDT, in the GDT there is an entry that points to the DLT and that entry has been expanded to be 16 bytes large, so that the base address which previously could only hold a 32-bit value is expanded to a 64-bit value.
+<br><br><br>If attempting a control flow transition via JMP/Jcc/CALL/RET from one segment into a different segment, the hardware will check the DPL of the target segment and allow the access only if CPL <= DPL. 
+<br>Some of the system instructions (called “privileged instructions”) are protected from use by application programs. The privileged instructions control system functions (such as the loading of system registers). They can be executed only when the CPL is 0 (most privileged). If one of these instructions is executed when the CPL is not 0, a general-protection exception (#GP) is generated.<br>The following system instructions are privileged instructions:
+- LTR — Load task register.
+- LIDT — Load IDT register.
+- MOV (control registers) — Load and store control registers.
+- LMSW — Load machine status word.
+- CLTS — Clear task-switched flag in register CR0.
+- MOV (debug registers) — Load and store debug registers.
+- INVD — Invalidate cache, without writeback.
+- WBINVD — Invalidate cache, with writeback.
+- INVLPG —Invalidate TLB entry.
+- HLT— Halt processor.
+- RDMSR — Read Model-Specific Registers.
+- WRMSR —Write Model-Specific Registers.
+- RDPMC — Read Performance-Monitoring Counter.
+- RDTSC — Read Time-Stamp Counter.
+The PCE and TSD flags in register CR4 (bits 4 and 2, respectively) enable the RDPMC and RDTSC instructions, respectively, to be executed at any CPL.
+<br> The MOV instruction cannot be used to load CS register. Attempting to do so results in an invalid opcode exception. Also, there is no "POP CS" instruction like there is for SS, DS, ES, FS, GS.
+
+### Call Gates 
+A Call Gates is a way to transfer control from on segment to another segment at a different privilege level.
+<br>They are typically used only in operating systems or executives that use the privilege-level protection mechanism. Call gates are also useful for transferring program control between 16-bit and 32-bit code segments.
+
+![](imgs/20241118002925.png)
+
+Call-gate descriptors in 32-bit mode provide a 32-bit offset for the instruction pointer (EIP); 64-bit extensions double the size of 32-bit mode call gates in order to store 64-bit instruction pointers (RIP).
+
+![](imgs/20241118002757.png).
+
+To transition from CPL 3 to CPL 0, we would issue a CALL instruction, with a far pointer, that had a Segment Selector, that pointed at a Call Gate Segment Descriptor.
+
+To access a call gate, a far pointer to the gate is provided as a target operand in a CALL or JMP instruction. The segment selector from this pointer identifies the call gate; the offset from the pointer is required, but not used or checked by the processor. (The offset can be set to any value.)<br>
+![](imgs/20241118004127.png)
+
+When the processor has accessed the call gate, it uses the segment selector from the call gate to locate the segment descriptor for the destination code segment. (This segment descriptor can be in the GDT or the LDT.) It then combines the base address from the code-segment descriptor with the offset from the call gate to form the linear address of the procedure entry point in the code segment.<br><br>Four different privilege levels are used to check the validity of a program control transfer
+through a call gate:
+- The CPL (current privilege level).
+- The RPL (requestor privilege level) of the call gate’s selector.
+- The DPL (descriptor privilege level) of the call gate descriptor.
+- The DPL of the segment descriptor of the destination code segment.
+The C flag (conforming) in the segment descriptor for the destination code segment is also checked.
+
+![](imgs/20241118003523.png)
+
+The privilege checking rules are different depending on whether the control transfer was initiated with a CALL or a JMP instruction.
+
+![](imgs/20241118003619.png)
+
+The DPL field of the call-gate descriptor specifies the numerically highest privilege level from which a calling procedure can access the call gate; that is, to access a call gate, the CPL of a calling procedure must be equal to or less than the DPL of the call gate. For example, in Figure 6-15, call gate A has a DPL of 3. So calling procedures at all CPLs (0 through 3) can access this call gate, which includes calling procedures in code segments A, B, and C. Call gate B has a DPL of 2, so only calling procedures at a CPL or 0, 1, or 2 can access call gate B, which includes calling procedures in code segments B and C. The dotted line shows that a calling procedure in code segment A cannot access call gate B.<br><br>
+The RPL of the segment selector to a call gate must satisfy the same test as the CPL of the calling procedure; that is, the RPL must be less than or equal to the DPL of the call gate. In the example in Figure 6-15, a calling procedure in code segment C can access call gate B using gate selector B2 or B1, but it could not use gate selector B3 to access call gate B.<br>
+![](imgs/20241118003916.png)
+
+If the privilege checks between the calling procedure and call gate are successful, the  processor then checks the DPL of the code-segment descriptor against the CPL of the calling procedure. Here, the privilege check rules vary between CALL and JMP instructions. Only CALL instructions can use call gates to transfer program control to more privileged (numerically lower privilege level) nonconforming code segments; that is, to nonconforming code segments with a DPL less than the CPL. A JMP instruction can use a call gate only to transfer program control to a non conforming code segment with a DPL equal to the CPL. CALL and JMP instruction can both transfer program control to a more privileged conforming code segment; that is, to a conforming code segment with a DPL less than
+or equal to the CPL.
