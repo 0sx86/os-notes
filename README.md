@@ -111,3 +111,19 @@ Every segment register has a “visible” part and a “hidden” part. (The hi
 
 The hidden part is especially used by the segment descriptor (LDT or GDT) to write informations (Base, Limit, => Access <=). 
 Segmentation is not optional, it is still used, but it is used in a much more limited form than what it was originally designed for.
+
+### GDT & LDT
+
+- GDTR
+
+![](imgs/20241117124157.png)
+
+The upper 64bits ("base address") of the register specifies the linear address where the GDT is stored. The lower 16bits ("table limit") specify the size of the table in bytes (with base+limit specifying the address of the last valid/included byte). Special instructions used to load a value into the register or store the value out to memory (```LGDT```: load 10 bytes from memory into GDTR, ```SGDT```: store 10 bytes of GDTR to memory)
+
+- LDTR
+
+![](imgs/20241117142638.png)
+
+Like the 16-bit segment registers, the 16-bit LDTR has a visible part, the segment selector, and a hidden part, the cached segment info which specifies the size of the LDT.
+	The selector's Table Indicator (T) bit must be set to 0 to specify that it's selecting from GDT, not from itself.
+Special instructions used to load a value into the register or store the value out to memory (```LLDT```: load 16 bit segment selector into LDTR, ```SLDT```: store 16 bit segment selector of LDTR to memory)
