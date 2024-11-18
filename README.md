@@ -242,3 +242,8 @@ The RPL of the segment selector to a call gate must satisfy the same test as the
 
 If the privilege checks between the calling procedure and call gate are successful, the  processor then checks the DPL of the code-segment descriptor against the CPL of the calling procedure. Here, the privilege check rules vary between CALL and JMP instructions. Only CALL instructions can use call gates to transfer program control to more privileged (numerically lower privilege level) nonconforming code segments; that is, to nonconforming code segments with a DPL less than the CPL. A JMP instruction can use a call gate only to transfer program control to a non conforming code segment with a DPL equal to the CPL. CALL and JMP instruction can both transfer program control to a more privileged conforming code segment; that is, to a conforming code segment with a DPL less than
 or equal to the CPL.
+<br>
+How can i return from a call through a Call Gate ?<br>A normal CALL pushes RIP, a inter-privilege far CALL through a Call Gate pushes SS:RSP and CS:RIP, RET can pop those back off the stack to return from an inter-privilege far call.
+
+![](imgs/20241118013953.png)
+<br><br>
