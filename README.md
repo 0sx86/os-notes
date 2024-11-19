@@ -247,3 +247,20 @@ How can i return from a call through a Call Gate ?<br>A normal CALL pushes RIP, 
 
 ![](imgs/20241118013953.png)
 <br><br>
+
+### Interrupts and Exceptions
+Interrupts and exceptions are events that indicate that a condition exists somewhere in the system, the processor, or within the currently executing program or task that requires the attention of a processor.<br>
+When an interrupt is received or an exception is detected, the currently running procedure or task is suspendedwhile the processor executes an interrupt or exception handler. When execution of the handler is complete, theprocessor resumes execution of the interrupted procedure or task. The resumption of the interrupted procedure ortask happens without loss of program continuity, unless recovery from an exception was not possible or an inter-rupt caused the currently running program to be terminated.<br>
+The processor receives interrupts from two sources:
+- External (hardware generated) interrupts
+- Software-generated interrupts
+
+![](imgs/20241120000837.png)
+
+
+**Difference between Interrupt and Exception**<br>
+Exceptions typically indicate error conditions, whereas interrupts typically indicate events from external hardware (Exception - E is for error). Interrupts clear the Interrupt Flag (IF), Exceptions do not. <br>
+3 categories of exception:
+- Fault - recoverable - pushed RIP points to **the faulting instruction**
+- Trap - recoverable - pushed RIP points to **the instruction following the trapping instruction**
+- Abort - unrecoverable -  **may not be able to save RIP where abort occurred**
