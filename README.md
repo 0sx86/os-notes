@@ -299,4 +299,29 @@ Like the 16-bit segment registers, and LDTR, the 16-bit TR has a visible part, t
 
 ![](imgs/20241120014629.png)
 
-When interrupt is occuring and changing state into ring 0, ```RSP0``` will be used as the rsp to decided where to throw stuff on the stack. So the kernel needs to set this up, this needs to be in some kernel space location so that people can't tamper with it and this is were state will be saved. If processor was changing to ring 1, ```RSP1``` will be used instead and similarly if it was changing to ring 2, ```RSP2``` would be used instead.<br>There is also new elements for the x86-64 extensions called the interrupt stack table. It is a list of seven possible value that can be used for different interrupts. Interruptions can precise which stack they want to use.    
+When interrupt is occuring and changing state into ring 0, ```RSP0``` will be used as the rsp to decided where to throw stuff on the stack. So the kernel needs to set this up, this needs to be in some kernel space location so that people can't tamper with it and this is were state will be saved. If processor was changing to ring 1, ```RSP1``` will be used instead and similarly if it was changing to ring 2, ```RSP2``` would be used instead.<br>There is also new elements for the x86-64 extensions called the interrupt stack table **IST**. It is a list of seven possible value that can be used for different interrupts. Interruptions can precise which stack they want to use.<br>
+**TSS is still required because he holds a pointer to the stack, which is where the stack is going to be consider to start before the informations gets pushed on into the stack. So TSS helps the hardware to know where to push informations.**
+
+#### Interrupt Decriptor Table (IDT)
+There is a specific register which points at the base (0th entry) of the IDT. The **IDT R**egister is named ITDR. When interrupt/exception occurs, the hardware automatically : 
+1. consults the IDTR
+2. finds the appropriate offset in the IDT
+3. pushes the saved state onto the stack (at a location determined by the TSS)
+4. changes CS:RIP to the address of the interrupt handler, as read from the IDT entry (interrupt descriptor).
+
+![](imgs/20241120021945.png)
+
+
+The IDTR register holds the base address (32 bits in protected mode; 64 bits in IA-32e mode) and 16-bit table limit for the IDT. The base address (upper 64bits of the register) specifies the linear address of byte 0 of the IDT; the table limit (the lower 16 bits) specifies the number of bytes in the table. The LIDT and SIDT instructions load and store the IDTR register, respectively. On power up or reset of the processor, the base address is set to the default value of 0 and the limit is set to 0FFFFH. The base address and limit in the register can then be changed as part of the processor initialization process.<br>Special instructions used to load a value into the register or store the value out to memory: 
+- ```LIDT - Load 10 bytes from memory into IDTR```
+- ```SIDT - Store 10 bytes of IDTR to memory```
+
+![](imgs/20241120022415.png)
+
+The IDT is an array of <= 256 16-byte decriptor entries. 0 through 31 are reserved for architecture-specific exceptions and interrupts. 32-255 are user-defined. While it interacts with segments, we can think of it as being an array of function (far) pointers, and when interrupt n is invoked by software or hardware, execution transfers to the address pointed to by the nth descriptor in the table. <br>
+![](imgs/20241120022734.png)
+
+Here, base address isn't used. It's always going to be 0. But access control bits like DPL, will be checked.
+
+![](imgs/20241120023107.png)
+![](imgs/20241120023117.png)
