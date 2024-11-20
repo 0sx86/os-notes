@@ -287,4 +287,16 @@ The ```IRET (Interrupt Return)``` instruction "POPs" it back off into the releva
 <br><br>Interrupts are another way to transfer control from one segment to another segment at a different privilege level.<br>How does the hardware decide where to push the interrupted procedure's saved state ?<br>=> To understand that, we need to learn about Tasks and Task-State Segment (TSS)
 
 #### Tasks
-The intel documentation often references the notion of a "task". It is a hardware mechanism to support multi-tasking, by saving/restoring task state, like registers. But it wasn't getting used for that purpose, so just like with segmentation, a lot of things were removed with the x86-64 extensions. But the Task-State Segment (TSS) is something which still must be used by the OS b virtue of being consulted on privilege changing interrupts, so we will at least talk about that.
+The intel documentation often references the notion of a "task". It is a hardware mechanism to support multi-tasking, by saving/restoring task state, like registers. But it wasn't getting used for that purpose, so just like with segmentation, a lot of things were removed with the x86-64 extensions. But the Task-State Segment (TSS) is something which still **must** be used by the OS b virtue of being consulted on privilege changing interrupts, so we will at least talk about that.
+
+![](imgs/20241120013604.png)
+
+Like the 16-bit segment registers, and LDTR, the 16-bit TR has a visible part, the segment selector, and a hidden part, the cached segment info which specifies the size of the Task-State Segment (TSS). Special instructions used to load a value into the register or store the value out to memory. ```LTR - Load 16 bit segment into TR``` and ```STR - Store 16 bit segment selector of TR to memory```. <br>Call gates facilitate transitions between 64-bit mode and compatibility mode. Task gates are not supported in IA-32e mode. On privilege level changes, stack segment selectors are not read from the TSS. Instead, they are set to NULL.
+
+![](imgs/20241120014302.png)
+
+![](imgs/20241120014416.png)
+
+![](imgs/20241120014629.png)
+
+When interrupt is occuring and changing state into ring 0, ```RSP0``` will be used as the rsp to decided where to throw stuff on the stack. So the kernel needs to set this up, this needs to be in some kernel space location so that people can't tamper with it and this is were state will be saved. If processor was changing to ring 1, ```RSP1``` will be used instead and similarly if it was changing to ring 2, ```RSP2``` would be used instead.<br>There is also new elements for the x86-64 extensions called the interrupt stack table. It is a list of seven possible value that can be used for different interrupts. Interruptions can precise which stack they want to use.    
