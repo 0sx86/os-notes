@@ -325,3 +325,17 @@ Here, base address isn't used. It's always going to be 0. But access control bit
 
 ![](imgs/20241120023107.png)
 ![](imgs/20241120023117.png)
+
+#### Interrupt Descriptors
+The descriptors in the IDT describe one of two gate types:
+- Interrupt Gate
+- Trap Gate
+The only difference between an interrupt gate and a trap gate is the way the processor handles the IF flag in the EFLAGS register. 
+
+![](imgs/20241120024200.png)
+
+IDT entries contain a segment selector and a 64-bit offset. That looks like a "logical address" aka "far pointer".
+- Type is binary 1110 for Interrupt Gate and 1111 for Trap Gate
+- P(resent) bit should be set to 1 to indicate this is a valid / filled in entry, and 0 otherwise
+- DPL is only checked when a descriptor is accessed by a software interrupt (ignored on hardware interrupts). Only allowed if CPL <= DPL
+- IST != 0 specifies a specific index to use for the RSP as pulled from the TSS. This is a location where saved context will be pushed ("I want my RSP to be in that table").
