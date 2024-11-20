@@ -264,3 +264,27 @@ Exceptions typically indicate error conditions, whereas interrupts typically ind
 - Fault - recoverable - pushed RIP points to **the faulting instruction**
 - Trap - recoverable - pushed RIP points to **the instruction following the trapping instruction**
 - Abort - unrecoverable -  **may not be able to save RIP where abort occurred**
+
+#### Saving state
+
+Previous 32-bit behavior
+![](imgs/20241120002114.png)
+
+64-bit behavior
+![](imgs/20241120004722.png)
+
+An interrupt (whether hardward or software) "PUSHes" save state onto the stack, so it can resume the previous execution after handling it. <br>
+The ```IRET (Interrupt Return)``` instruction "POPs" it back off into the relevant registers, in the same sense that RET "POPs" a saved return address into RIP.
+
+#### Software Generated Interrupts
+
+- ```Int n```: Invoke Interrupt n. Important: while we can invoke anything in the IDT, some interrupts except an error code. INT does not push any error code, and therefore a handler may not behave correctly.
+- ```IRET```: returns from an interrupt, popping all saved state back into the correct registers
+- ```INT3```: There is a special one-byte "0xCC" opcode form that can be used to invoke interrupt 3 for software debug breakpoints.
+- ```INT1```: There is a special one-byte "0xF1" opcode form that can be used to invoke interrupt 1 to fake hardware debug breakpoints
+- ```INTO```: Invoke overflow interrupt if the overflow flag (OF) in RFLAGS is set to 1 (like a conditionnal ```INT 4```)
+- ```UD2```: Invoke invalid opcode interrupt (same as ```INT 6```)
+<br><br>Interrupts are another way to transfer control from one segment to another segment at a different privilege level.<br>How does the hardware decide where to push the interrupted procedure's saved state ?<br>=> To understand that, we need to learn about Tasks and Task-State Segment (TSS)
+
+#### Tasks
+The intel documentation often references the notion of a "task". It is a hardware mechanism to support multi-tasking, by saving/restoring task state, like registers. But it wasn't getting used for that purpose, so just like with segmentation, a lot of things were removed with the x86-64 extensions. But the Task-State Segment (TSS) is something which still must be used by the OS b virtue of being consulted on privilege changing interrupts, so we will at least talk about that.
