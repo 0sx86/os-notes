@@ -339,3 +339,6 @@ IDT entries contain a segment selector and a 64-bit offset. That looks like a "l
 - P(resent) bit should be set to 1 to indicate this is a valid / filled in entry, and 0 otherwise
 - DPL is only checked when a descriptor is accessed by a software interrupt (ignored on hardware interrupts). Only allowed if CPL <= DPL
 - IST != 0 specifies a specific index to use for the RSP as pulled from the TSS. This is a location where saved context will be pushed ("I want my RSP to be in that table").
+
+#### Interrupt Masking
+It is sometimes useful to disable some interrupts. (E.g. to stop an interrupt from occurring in the middle of handling another interrupt.) This is called "masking" the interrupt. The Interrupt Flag (IF) in the RFLAGS register is cleared automatically whenever an interrupt occurs through an Interrupt Gate. But, it is not cleared if we go through a Trap Gate. **This is the only difference between the two types of gates**. Maskable interrupts can be manually masked by clearing IF (```CLI - Clear IF``` and ```STI - Set IF```)<br><br>The IF does not mask the explicit invocation of an interrupt with the INT N/INT1/INT3/INT0/UD2 instructions. <br>The IF does not mask a Non Maskable Interrupt - IDT[2]
