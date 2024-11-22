@@ -378,3 +378,45 @@ Restore RFLAGS from R11
 Loads CS with value stored in IA32_STAR MSR bits [63:48] and adds 16
 Loads SS with value stored in IA32_STAR MSR bits [63:48] and adds 8
 Whichever side of kernel/user saved RSP is responsible for restoring it
+
+![](imgs/20241122114027.png)
+
+The SYSCALL instruction does not save the stack pointer, and the SYSRET instruction does not restore it. It is likely that the OS system-call handler will change the stack pointer from the user stack to the OS stack. If so, it is the responsibility of software first to save the user stack pointer. This might be done by user code, prior to executing SYSCALL, or by the OS system-call handler after SYSCALL.
+
+Because the SYSRET instruction does not modify the stack pointer, it is necessary for software to switch back to the user stack. The OS may load the user stack pointer (if it was saved after SYSCALL) before executing SYSRET; alter-natively, user code may load the stack pointer (if it was saved before SYSCALL) after receiving control from SYSRET.
+
+If the OS loads the stack pointer before executing SYSRET, it must ensure that the handler of any interrupt or exception delivered between restoring the stack pointer and successful execution of SYSRET is not invoked with the user stack.
+
+![](imgs/20241122140233.png)
+From the details of SYSRET, we can see ```CS.SELECTOR := CS.SELECTOR OR 3;```. The microcode makes always sure returning back to userspace => it is forcing use into ring 3. This is one of theses consequences of rings 1 and 2 never being used.
+
+![](imgs/20241122141533.png)
+
+
+SYSENTER/SYSEXIT are preferred on 32-bit systems, because they're supported on both Intel and AMD (was created before AMD's x86-64 extensions).
+
+##### Syscall-adjacent Tech (swapgs, {rd,wr}{fs,gs}base)
+
+**SWAPGS**
+When using SYSCALL to implement system calls, there is no kernel stack at the OS entry point. Neither is there a straightforward method to obtain a pointer to kernel structures from which the kernel stack pointer could be read. Thus, the kernel cannot save general purpose registers or reference memory.
+=> The SWAPGS instruction is designed to help with the above issue  
+ Exchanges the GS base linear address (mapped to IA32_GS_BASE) with the one found in the IA32_KERNEL_GS_BASE MSR (0xC0000102). Useful for interrupt handlers as wel as SYSCALL handlers.
+ 
+![](imgs/20241122160011.png)
+
+
+Generally speaking OSes use FS and GS to point at global data structures that they want to easily be able to access.
+
+x86-64:
+- Userspace: FS => Thread Local Storage (TLS), GS => The GS segment has no common use
+- Kernel: FS => Unused, GS => Per-CPU variables
+x86-32: 
+- Userspace: FS => Unused, GS => Thread Local Storage (TLS)
+- Kernel: FS => Unused, GS => Unused
+
+if CPUID.07H.0H:EBX.FSGBASE[bit 0] = 1 && CR4.FSGSBASE = 1
+=> it means that the processor supports the following instructions :
+- ```RDFSBASE```/```WRFSBASE```
+- ```RDGSBASE```/```WRGSBASE```
+Which can be used instead of ```RDMSR```/```WRSMR``` to ```read```/```write``` the FS and GS base addresses.
+["A possible end to the FSGSBASE saga"](https://lwn.net/Articles/821723/)
