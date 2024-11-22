@@ -420,3 +420,29 @@ if CPUID.07H.0H:EBX.FSGBASE[bit 0] = 1 && CR4.FSGSBASE = 1
 - ```RDGSBASE```/```WRGSBASE```
 Which can be used instead of ```RDMSR```/```WRSMR``` to ```read```/```write``` the FS and GS base addresses.
 ["A possible end to the FSGSBASE saga"](https://lwn.net/Articles/821723/)
+
+
+#### Read the TimeStamp Counter (RDTSC)
+What's the time ? Time to ReaD (the) Time-Stamp Counter
+The TSC is a 64bit counter introduced in the Pentium
+Set to 0 when processor reset, incremented on each clock cycle thereafter.
+
+![](imgs/20241122172451.png)
+
+Reads the current value of the processor’s time-stamp counter (a 64-bit MSR) into the EDX:EAX registers. The EDX register is loaded with the high-order 32 bits of the MSR and the EAX register is loaded with the low-order 32 bits. (On processors that support the Intel 64 architecture, the high-order 32 bits of each of RAX and RDX are cleared.)
+
+- The counter also can be read out of IA32_TIME_STAMP_COUNTER (0x10) MSR
+- It can set bit 2 in Control Register 4 so that only Ring 0 can use the instruction.
+- Processor families increment the timestamp counter differently (see Vol 3, Sect 17.17)
+- VM Extensions have special provisions to help hypervisors lie to VMs about RDTSC contents
+
+The processor monotonically increments the time-stamp counter MSR every clock cycle and resets it to 0 whenever the processor is reset.
+
+The time stamp disable (TSD) flag in register CR4 restricts the use of the RDTSC instruction as follows. When the flag is clear, the RDTSC instruction can be executed at any privilege level; when the flag is set, the instruction can only be executed at privilege level 0.
+
+The time-stamp counter can also be read with the RDMSR instruction, when executing at privilege level 0.
+
+The RDTSC instruction is not a serializing instruction. It does not necessarily wait until all previous instructions have been executed before reading the counter. Similarly, subsequent instructions may begin execution before the read operation is performed. The following items may guide software seeking to order executions of RDTSC:
+- If software requires RDTSC to be executed only after all previous instructions have executed and all previous loads are globally visible,1 it can execute LFENCE immediately before RDTSC.
+- If software requires RDTSC to be executed only after all previous instructions have executed and all previous loads and stores are globally visible, it can execute the sequence MFENCE;LFENCE immediately before RDTSC.
+- If software requires RDTSC to be executed prior to execution of any subsequent instruction (including any memory accesses), it can execute the sequence LFENCE immediately after RDTSC.
