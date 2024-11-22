@@ -31,7 +31,7 @@ WIP
 
 ### Model Specific Registers (MSRs)
 The mnemonic cpuid is the way that software finds out what features are supported, but how to enable it ?
-=> MSRs provide a way on Intel systems to support an number of feature flags. The list is so big that Intel eventuyally split it out into Volume 4 of the manuals.
+=> MSRs provide a way on Intel systems to support an number of feature flags. The list is so big that Intel eventually split it out into Volume 4 of the manuals.
 
 Naming Caveat : architectural MSRs were given the prefix "IA32_". However, it's not specific limited to 32 bits execution.
 
@@ -278,7 +278,7 @@ The ```IRET (Interrupt Return)``` instruction "POPs" it back off into the releva
 
 #### Software Generated Interrupts
 
-- ```Int n```: Invoke Interrupt n. Important: while we can invoke anything in the IDT, some interrupts except an error code. INT does not push any error code, and therefore a handler may not behave correctly.
+- ```Int n```: Invoke Interrupt handler n. Important: while we can invoke anything in the IDT, some interrupts except an error code. INT does not push any error code, and therefore a handler may not behave correctly.
 - ```IRET```: returns from an interrupt, popping all saved state back into the correct registers
 - ```INT3```: There is a special one-byte "0xCC" opcode form that can be used to invoke interrupt 3 for software debug breakpoints.
 - ```INT1```: There is a special one-byte "0xF1" opcode form that can be used to invoke interrupt 1 to fake hardware debug breakpoints
@@ -342,3 +342,39 @@ IDT entries contain a segment selector and a 64-bit offset. That looks like a "l
 
 #### Interrupt Masking
 It is sometimes useful to disable some interrupts. (E.g. to stop an interrupt from occurring in the middle of handling another interrupt.) This is called "masking" the interrupt. The Interrupt Flag (IF) in the RFLAGS register is cleared automatically whenever an interrupt occurs through an Interrupt Gate. But, it is not cleared if we go through a Trap Gate. **This is the only difference between the two types of gates**. Maskable interrupts can be manually masked by clearing IF (```CLI - Clear IF``` and ```STI - Set IF```)<br><br>The IF does not mask the explicit invocation of an interrupt with the INT N/INT1/INT3/INT0/UD2 instructions. <br>The IF does not mask a Non Maskable Interrupt - IDT[2]
+
+
+### System calls
+The addition of privilege separation (e.g. Intel privilege rings), necessitates some way to transfer control between different execution domains. 
+Multiple mechanisms can be used, in historical order : Call Gates, Interrupts, Syscalls
+
+![](20241122110604.png)
+
+Interrupt Gate is the most compatible, but also the slowest. The instructions syscall and sysenter are the best. This why operating systems generally try to use these syscalls.
+Dedicated system cal instructions are another way to transfer control from one segment to another segment at a different privilege level.
+
+Preferred for 32-bit: SYSENTER/SYSEXIT (intel invented) - Preferred for 64-bit: SYSCALL/SYSRET (amd invented).
+
+![](imgs/20241122112120.png)
+
+SYSCALL Enable: IA32_EFER.SCE (R/W) Enables SYSCALL/SYSRET instructions in 64-bit mode.
+
+
+**SYSCALL - System Call**<br>Save RIP of address after SYSCALL into RCX
+Change RIP to value stored in IA32_LSTAR MSR (0xc0000082)
+Save RFLAGS into R11
+Clears the each bit in RFLAGS that has its bit set in IA32_FMASK MSR (0xC0000084) 
+> Effectively : RFLAGS &= ~IA32_FMASK
+> Any bit that is set to one this IA32_MASK MSR will be cleared in the RFLAGS at the time that it gets into kernelspace
+
+Loads CS with value stored in IA32_STAR MSR (0xC0000081) bits [47:32] and SS = (CS+8)
+> Easiest to just read the instruction Operation pseudocode in the manual to see what is does
+
+Doesn't save RSP. Either kernel or userspace SYSCALL handler is responsible for that.
+
+**SYSRET - System Call Return**
+Restore RIP from RCX
+Restore RFLAGS from R11
+Loads CS with value stored in IA32_STAR MSR bits [63:48] and adds 16
+Loads SS with value stored in IA32_STAR MSR bits [63:48] and adds 8
+Whichever side of kernel/user saved RSP is responsible for restoring it
