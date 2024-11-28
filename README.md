@@ -343,6 +343,7 @@ IDT entries contain a segment selector and a 64-bit offset. That looks like a "l
 #### Interrupt Masking
 It is sometimes useful to disable some interrupts. (E.g. to stop an interrupt from occurring in the middle of handling another interrupt.) This is called "masking" the interrupt. The Interrupt Flag (IF) in the RFLAGS register is cleared automatically whenever an interrupt occurs through an Interrupt Gate. But, it is not cleared if we go through a Trap Gate. **This is the only difference between the two types of gates**. Maskable interrupts can be manually masked by clearing IF (```CLI - Clear IF``` and ```STI - Set IF```)<br><br>The IF does not mask the explicit invocation of an interrupt with the INT N/INT1/INT3/INT0/UD2 instructions. <br>The IF does not mask a Non Maskable Interrupt - IDT[2]
 
+<<<<<<< HEAD
 
 ### System calls
 The addition of privilege separation (e.g. Intel privilege rings), necessitates some way to transfer control between different execution domains. 
@@ -446,3 +447,8 @@ The RDTSC instruction is not a serializing instruction. It does not necessarily 
 - If software requires RDTSC to be executed only after all previous instructions have executed and all previous loads are globally visible,1 it can execute LFENCE immediately before RDTSC.
 - If software requires RDTSC to be executed only after all previous instructions have executed and all previous loads and stores are globally visible, it can execute the sequence MFENCE;LFENCE immediately before RDTSC.
 - If software requires RDTSC to be executed prior to execution of any subsequent instruction (including any memory accesses), it can execute the sequence LFENCE immediately after RDTSC.
+
+### Paging
+When paging is enabled, a linear address is the same thing as a virtual memory address or virtual address. 
+The Translation Lookaside Buffer (TLB) is a cache of Virtual -> Physical mappings the MMU consults.
+Paging makes memory access virtual in that no longer does the linear address correspond to the exact same physical address ent out on the bus lines to RAM. Low addresses can map to high addresses, or low addresses, or no addresses.
