@@ -449,6 +449,20 @@ The RDTSC instruction is not a serializing instruction. It does not necessarily 
 - If software requires RDTSC to be executed prior to execution of any subsequent instruction (including any memory accesses), it can execute the sequence LFENCE immediately after RDTSC.
 
 ### Paging
+- Logical Address: Far pointer that specifies a segment selector + offset in that segment
+- Linear Address: Flat 32/64 notional address-space, post-segmentation
+- Virtual Address: Address that takes paging into account
+- Physical Address: Offset into physical RAM
+
+![](imgs/20241205230717.png)
+
+It's called "paging" because physical memory is divided into fixed size chunks called _pages_.
+
 When paging is enabled, a linear address is the same thing as a virtual memory address or virtual address. 
+Memory Management Unit => chunk of hardware in a processor which uses the current execution mode, segmentation information, and paging information to perform the overall process of translating logical to physical memory addresses.
 The Translation Lookaside Buffer (TLB) is a cache of Virtual -> Physical mappings the MMU consults.
-Paging makes memory access virtual in that no longer does the linear address correspond to the exact same physical address ent out on the bus lines to RAM. Low addresses can map to high addresses, or low addresses, or no addresses.
+Paging makes memory access virtual in that no longer does the linear address correspond to the exact same physical address sent out on the bus lines to RAM (as it does when paging is disabled). Low addresses can map to high addresses, or low addresses, or no addresses.
+
+There are 5 Control Registers (CR0-CR4) which are used for paging control as well as enabling/disabling other features.
+
+![](imgs/20241128013711.png)
