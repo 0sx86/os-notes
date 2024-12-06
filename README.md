@@ -343,8 +343,6 @@ IDT entries contain a segment selector and a 64-bit offset. That looks like a "l
 #### Interrupt Masking
 It is sometimes useful to disable some interrupts. (E.g. to stop an interrupt from occurring in the middle of handling another interrupt.) This is called "masking" the interrupt. The Interrupt Flag (IF) in the RFLAGS register is cleared automatically whenever an interrupt occurs through an Interrupt Gate. But, it is not cleared if we go through a Trap Gate. **This is the only difference between the two types of gates**. Maskable interrupts can be manually masked by clearing IF (```CLI - Clear IF``` and ```STI - Set IF```)<br><br>The IF does not mask the explicit invocation of an interrupt with the INT N/INT1/INT3/INT0/UD2 instructions. <br>The IF does not mask a Non Maskable Interrupt - IDT[2]
 
-<<<<<<< HEAD
-
 ### System calls
 The addition of privilege separation (e.g. Intel privilege rings), necessitates some way to transfer control between different execution domains. 
 Multiple mechanisms can be used, in historical order : Call Gates, Interrupts, Syscalls
@@ -466,3 +464,66 @@ Paging makes memory access virtual in that no longer does the linear address cor
 There are 5 Control Registers (CR0-CR4) which are used for paging control as well as enabling/disabling other features.
 
 ![](imgs/20241128013711.png)
+
+**CR0**
+- Protection Enabled (PE, bit 0): this is how the system gets from real mode to protected mode. It must be set to get into Protected Mode from the default reset state of Real Mode.
+- Write Protect (WP, bit 16): stops ring 0 from writing to read-only pages
+- Paging Enabled (PG, bit 31): must be set to enable paging. Requires PE to be set.
+
+**CR3**
+Points at the start of the page tables, which the MMU walks to translate virtual memory to physical.
+
+**CR2**
+CR2 is used when the mmu try to lock the page table but something goes wrong => If the virtual to physical lookup can't complete for some reason (e.g. permissions, or just because there's no mapping in the page tables) a "page fault" (INT 14) is signaled. 
+CR2 records the linear address which was attempted to be translated via a page table walk.
+
+**CR4**
+- Page Size Extensions (PSE, bit 4): Allows for pages > 4KB
+- Physical Address Extension (PAE, bit 5): Allows physical addresses
+- Page Global Enable (PGE, bit 7): a feature to make caching page table information more efficient
+- 57-bit linear addresses (LA57, bit 12): a new and even larger memory address space is accessible
+
+
+If CR0.PG = 1, a logical processor is in one of four paging modes, depending on the values of CR4.PAE, IA32_EFER.LME, and CR4.LA57. 
+The following items identify certain limitations and other details:
+- IA32_EFER.LME cannot be modified while paging is enabled (CR0.PG = 1). Attempts to do so using WRMSR cause a general-protection exception (#GP(0)).
+- Paging cannot be enabled (by setting CR0.PG to 1) while CR4.PAE = 0 and IA32_EFER.LME = 1. Attempts to do so using MOV to CR0 cause a general-protection exception (#GP(0)).
+- One node in Figure 5-1 is labeled “IA-32e mode.” This node represents either 4-level paging (if CR4.LA57 = 0) or 5-level paging (if CR4.LA57 = 1). As noted in the following items, software cannot modify CR4.LA57 (effecting transition between 4-level paging and 5-level paging) without first disabling paging.
+- CR4.PAE and CR4.LA57 cannot be modified while either 4-level paging or 5-level paging is in use (when CR0.PG = 1 and IA32_EFER.LME = 1). Attempts to do so using MOV to CR4 cause a general-protection exception (#GP(0)).
+- Regardless of the current paging mode, software can disable paging by clearing CR0.PG with MOV to CR0.
+
+![](imgs/20241206094349.png)
+
+- Software can transition between 32-bit paging and PAE paging by changing the value of CR4.PAE with MOV to CR4.
+- Software cannot transition directly between 4-level paging (or 5-level paging) and any of other paging mode. It must first disable paging (by clearing CR0.PG with MOV to CR0), then set CR4.PAE, IA32_EFER.LME, and CR4.LA57 to the desired values (with MOV to CR4 and WRMSR), and then re-enable paging (by setting CR0.PG with MOV to CR0). As noted earlier, an attempt to modify CR4.PAE, IA32_EFER.LME, or CR.LA57 while 4-level paging or 5-level paging is enabled causes a general-protection exception (#GP(0)).
+- VMX transitions allow transitions between paging modes that are not possible using MOV to CR or WRMSR. This is because VMX transitions can load CR0, CR4, and IA32_EFER in one operation.
+
+
+
+Accessing control registers can be done with their own MOV instructions ```MOV CR4, r64``` and ```MOV r64, CR```. Different opcodes than normal MOVs, no fancy r/mX form. Only register to register. 
+
+**Paging Permutations**
+
+![](imgs/20241206095714.png)
+
+MAXPHYADDR is the maximum physical address size and is indicated by CPUID.80000008H:EAX[bits 7-0].
+MAXLINADDR is the maximum linear address size and is indicated by CPUID.80000008H:EAX[bits 15-8 ].
+
+CR4.PEA control whether or not we can access large areas of physical memory and CR4.PSE control whether or not we can have pages which are greater than 4KB.
+So without CR4.PSE, it's always 4KB and with them, it can be larger : 2MB, 4MB, 1GB.
+The sizes of linear address to physical address translation that occur at different configurations started with 32->32 then we have with addition of CR4.PSE that supports a physical address space of 40bits.
+
+
+**32bit Linear to 32bit Physical, 4KB Pages**
+
+![](imgs/20241206140442.png)
+
+All begins with a 32-bit linear address in 32-bit mode, then we have our CR3 which is also 32bits on a 32-bit system. That gives us a base address of a table. This table has 2¹⁰ 4-byte entries insode of it, and so if we use the top 10 bits of the linear address as an index into this table, it will select on of those 2¹⁰ entries inside of this tables. If the top 10 bits was 0 then we would be pointing at entry number 0. If the top 10 bits was 0x3FF, then we'd pointing at the highest entry inside of this table.
+Each entry in this 32-bit mode is 4bytes. 20 of the 32bits is an entry are used to specify the upper 20 bits of the address of another table. The bottom 12 bits are assumed to be 0.
+
+=> The table must be on a 12-bit aligned address so this entry we said it every entry is 4 bytes so the 20 most significant bits of this entry are going to be used for the table address. The the MMU reads this value and it assumes the bottom 12 bits are all 0 so it expects that it ends in 0x0000 therefore because the MMU is able to assume that the bottom 12 bits are 0, si it can reuse the 12 bits for various flags and things. In order for this table to behave correctly, it needs to be placed at an address that ends in 0x000, aka is a multiple of 0x1000 (0, 0x1000, 0x2000, ...). This is called being "page-aligned", since a page is 0x1000 (4KB). 
+
+
+So, those 20bits are going to point us at table 2. Table 2 is going to be 2¹⁰ 4byte entries so we are again going to grab 10bits out of the linear address, and we are going to use those as an index into table 2 to find some entry that again is going to be some sort of 4 byte data structure once again, it's going to use 20bits and assume the bottom 12 bits are zeros and that will give us the address of the page that we're ultimately looking for.
+
+Finally, we find ourselves at the 4 KB page at some address that is page aligned 0x0000. So 2¹² bytes, so that perfectly aligns with the fact that we have got 12 bits left in our 32-bit Linear Address, that can be used as an offset into the page to find the bytes that we are looking for. If the 12 least significant bits were 0, we would be pointing at the zero byte of the page and if the 12 least significant bits were 0xffc and if the processor happened to be doing a 4 byte fetch, then it would be 0xffc and it would fetch four bytes and it would get "\$\$BY"
