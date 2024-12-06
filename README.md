@@ -527,3 +527,11 @@ Each entry in this 32-bit mode is 4bytes. 20 of the 32bits is an entry are used 
 So, those 20bits are going to point us at table 2. Table 2 is going to be 2¹⁰ 4byte entries so we are again going to grab 10bits out of the linear address, and we are going to use those as an index into table 2 to find some entry that again is going to be some sort of 4 byte data structure once again, it's going to use 20bits and assume the bottom 12 bits are zeros and that will give us the address of the page that we're ultimately looking for.
 
 Finally, we find ourselves at the 4 KB page at some address that is page aligned 0x0000. So 2¹² bytes, so that perfectly aligns with the fact that we have got 12 bits left in our 32-bit Linear Address, that can be used as an offset into the page to find the bytes that we are looking for. If the 12 least significant bits were 0, we would be pointing at the zero byte of the page and if the 12 least significant bits were 0xffc and if the processor happened to be doing a 4 byte fetch, then it would be 0xffc and it would fetch four bytes and it would get "\$\$BY"
+
+
+**32bit Linear to 32bit Physical, 4MB Pages**
+The only difference here is that CR4.PSE is set to 1 and therefore, if the operating system wants, it can use 4 MB pages at a depth of 1 instead of 4KB pages at depth of 2. 
+
+![](imgs/20241206144057.png)
+
+The PDE entry is going to only use 10 bits instead of 20 bits, like it used last time. So that means that the most significant 10 bits are going to be used as part of a physical address of the next 4 MB page where the bottom 22 bits are all assumed to be 0. That leaves 22 bits for flags and stuff just like there were 12 bits available in 4KB paging.
