@@ -467,7 +467,7 @@ There are 5 Control Registers (CR0-CR4) which are used for paging control as wel
 
 **CR0**
 - Protection Enabled (PE, bit 0): this is how the system gets from real mode to protected mode. It must be set to get into Protected Mode from the default reset state of Real Mode.
-- Write Protect (WP, bit 16): stops ring 0 from writing to read-only pages
+- Write Protect (WP, bit 16): stops ring 0 from writing to read-only pages. It is used to facilitate "Copy on Write" in OSes. It also plays a role in SMAP/SMEP logic.
 - Paging Enabled (PG, bit 31): must be set to enable paging. Requires PE to be set.
 
 **CR3**
@@ -535,3 +535,83 @@ The only difference here is that CR4.PSE is set to 1 and therefore, if the opera
 ![](imgs/20241206144057.png)
 
 The PDE entry is going to only use 10 bits instead of 20 bits, like it used last time. So that means that the most significant 10 bits are going to be used as part of a physical address of the next 4 MB page where the bottom 22 bits are all assumed to be 0. That leaves 22 bits for flags and stuff just like there were 12 bits available in 4KB paging.
+
+
+**32bit Linear to 40bit Physical, Physical Address Extensions (PAE)**
+No one to one mapping is possible so, when the processor say "gimme memory address at 7GB" this is not possible because this is greater than a 32-bit  address so if it tries that then a whole bunch of nothing's going to happen (registers don't hold more than 32 bits).
+
+Here, thanks to PAE, an operating system could create a page table that could actually do the work of translating something like "gimme memory address at 3GB" to make that access physical RAM at 7GB. So the processor is able to access all the RAM and the operating system can not have to use virtual memory in the swapping to disk 
+
+**48bit Linear to 52bit Physical, 4-level Paging, 4KB, 2MB, 1GB Pages**
+It's actually MAXPHYADDR-12 not juste hardcoded 40
+
+![](imgs/20241206172712.png)
+
+![](imgs/20241206172928.png)
+
+![](imgs/20241206173003.png)
+
+**57bit Linear to 52bit Physical, 5-level Paging**
+Behaves just like 4-Level/48-bit Linear Address Paging (just adds another level)
+When we turned on CR4.PAE, its doesn't support anything larger than 1GB pages.
+
+![](imgs/20241228112430.png)
+
+
+**CR3 with 4-Level Paging**
+bits[51:12] are the MSBs of the physical address where the PML4 (Page Map Level 4) table can be found. PML4 table must be 0x1000-aligned, so that the bottom 12 bits are 0. PCD/PWT have to do with caching. When OSes context switch between different processes, they will change the contents of CR3 to point at different page table hierarchies.
+
+**Page Map Level 4**
+- Bit 0 is the Present (P) bit. Attemps to access a linear address which coresponds to a PML4E with P == 0, will cause a Page Fault (#PF, INT 14). Only if P is 1 are the other bits considered by the MMU. An OS should zero-initialize the entire PML4 before filling in select entries for the Virtual -> Physical mappings it wants
+- Bit 1  is the Read/Write (R/W) flag. If 1, reads and writes are allowed. If 0, only reads are allowed. Attempts to write to a R/W == 0 page yields a PF. 
+- Bit 2 is the User/Supervisor (U/S) flag. If 0, only CPL < 3 (Supervisor) accesses are allowed. If 1, any CPL (User & Supervisor) allowed. Attemps to access U/S == 0 page in CPL == 3 yields a PF
+- Bit 63 is the Execute Disable (XD) bit. If this is 1, and the MMU is walking through this entry to fetch instructions from memory for execution, then PF. The bit originally called NO-Execute (NX) in the AMD x86-64 extensions.
+
+Each PML4E points to a PDPTE (Page Directory Pointer Table Entry). 
+A PDPTE is an entry in the Page Directory Pointer Table (PDPT). The PML4E points to this table. Each PDPTE points to a Page Directory Entry (PDE). 
+A PDE is an entry in the Page Directory (PD). Each PDE points to a Page Table Entry (PTE).
+A PTE is an entry in the Page Table (PT). Each PTE contains a pointer to a physical memory page, as well as the metadata like access permissions
+
+**Full Hierarchy in the 4-Level Paging System**
+CR3 → PML4E → PDPTE → PDE → PTE → Physical Address.
+
+Each table (PML4, PDPT, etc) contains 512 entries, each 8 bytes size. Virtual addresses in 64-bit mode typically use only the lower 48 bits. 
+
+**PML4Es with 4-Level Paging**
+- Bit 1 is the Read/Write (R/W) flag
+- Bit 2 is the User/Supervisor (U/S) flag
+- Bit 63 is the Execute Disable (XD) bit
+=> These are access control mechanisms limiting what user or kernel code can do 
+- Bits [M-1:12] are used to calculate the physical address where the PDPT can be found by the MMU. PDPT should be 0x1000 aligned (aka page-aligned), the bottom 12 bits of its address should be 0.
+
+**Exploit Mitigations: SMAP/SMEP**
+- Supervisor-Mode Access Prevention (SMAP): don't let ring 0 (supervisor) read/write non-supervisor (U/S\==1) pages.
+- Supervisor-Mode Execution Prevention (SMEP): don't let ring 0 (supervisor) execute non-supervisor (U/S\==1) pages.
+
+**PDPTEs with 4-Level Paging**
+- Bit 6 is the Dirty (D) bit. It is often used by OSes to know whether a given memory location has been written to. This can be used in OS strategies for evicting RAM to disk when they run out of free RAM.
+- Bit 7 Page Size (PS) indicates whether this entry should be interpreted as pointing at a 1GB page, or a Page Directory. 
+- Bit 8, the Global (G) bit, affects caching of Virtual -> Physical translations in the Translation Lookaside Buffer (TLB). If 0, the mapping will be flushed when CR3 is changed. If 1, it will be retained on CR3 changes.
+- If it is a 1GB page, then bits [M-1:30] are the upper bits of the physical address of the page, and the bottom 30bits need to be zero (1GB-page-aligned)
+
+**PDEs with 4-Level Paging**
+- Bit 7 Page Size (PS) indicates whether this entry should be interpreted as pointing at a 2MB page, or a Page Table
+- If it is a 2MB page, then bits [M-1:21] are the upper bits of the physical address of the page, and the bottom 21 bits need to be zero (2MB-page-aligned)
+- P, R/W, U/S, D, G, and XD bits all behave exactly the same as they did in the PDPTE
+
+**PTEs with 4-Level Paging**
+- P, R/W, U/S, D, G and XD bits all behave exactly the same as they did in the PDPTE & PDE
+- Bits [M-1:12] are the upper bits of the physical address of the page, and the bottom 12 bits need to be zero (4KB-page-aligned)
+
+**Canonical Addresses**
+Current "64-bit system" processors can't actually use a 64-bit linear address space or a 64-bit physical address space. At most, Intel processors currently support a 57-bit Linear, and 52-bit Physical address space. 
+A canonical address is one in which the upper N unused bits must always all be 0 or 1. The processor sign-extends the most significant bit of the linear address space to the upper N unused bits. 
+A linear address is 48-bit canonical if bits 63:47 of the address are identical. Similarly, an address is 57-bit canonical if bits 63:56 of the address are identical. Any linear address is that 48-bit canonical is also 57-bit canonical.
+Attempts to access non-canonical linear addresses leads to a General Protection (#GP) fault. Causing #GPs through non-canonical access at opportune times has been implicated in a few interesting vulnerabilities in multiple OSes and virtualization systems
+
+
+**Page Faults**
+What are the consequences if the MMU is walking the page tables and it encounters a P\*E (PML4E, PDTPE, PDE, PTE) that has the Present bit set to 0 ?
+=> It invokes a Page Fault #PF (IDT[14]). The page fault handler then determines whether it can recover from the fault. 
+When a Page Fault occurs, the address that the MMU was attempting to translate to a physical address automatically put into the CR2 register.
+Page fault pushes an Error Code and so the Page Fault Handler is responsible for interpreting that error code.
