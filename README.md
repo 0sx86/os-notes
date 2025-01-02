@@ -615,3 +615,76 @@ What are the consequences if the MMU is walking the page tables and it encounter
 => It invokes a Page Fault #PF (IDT[14]). The page fault handler then determines whether it can recover from the fault. 
 When a Page Fault occurs, the address that the MMU was attempting to translate to a physical address automatically put into the CR2 register.
 Page fault pushes an Error Code and so the Page Fault Handler is responsible for interpreting that error code.
+
+
+**Translation Lookaside Buffer (TLB)**
+Virtual address come from the CPU, the MMU is responsible for walking page table and translating virtual addresses into physical addresses that is put into RAM. There is this side lookup with the TLB which is a cache of virtual to physical.
+TLB is an in-package cache which stores translations between linear addresses and physical pages. The idea being that memory accesses will be faster when the hardware does not have to walk from CR3 through all the in-memory page tables. 
+By caching a map which describes which linear page corresponds to which physical page, the hardware can just use the frame number ORed with the least significant x bits which specifies the offset into the page. Where x depends on what type of paging layout we're using :
+- 4KB pages x = 12 (2¹² = 4KB)
+- 2MB pages x = 21 (2²¹ = 2MB)
+- 4MB pages x = 22 (2²² = 4MB)
+- 1GB pages x = 30 (2³⁰ = 1GB)
+The TLB is logically similar to the way that the "hidden" part of a segment register stores the information from a segment descriptor, so that the MMU doesn't have to go look up information from the GDT all the time. Except, it's more complicated in that the TLB is a real cache and follows layout like other types of caches.
+Whenever CR3 is set to a new value (only ring 0 can MOV a value to CR3), all TLB entries which are not marked as global are flushed (bit 8 G == 1)
+Ring 0 code can also use the ```INVLPG``` instruction to invalidate the TLB cache entry for a specified virtual memory address.
+There are actually multiple TLBs. The newest chips typically have 6: 
+- 3x Data TLBs (DTLBs): Separate ones for each of the 4K, 2/4MB, 1GB page sizes
+- 2x Instruction TLBs (ITLBs): Separate ones for each of the 4K, 2/4MB page sizes
+- 1X Shared TLB (STLB) aka L2 TLB: Shared between ITLB & DTLBs
+Number of entries in the cache differs between chip microarchitectures and revisions. 
+
+**Non-executable Memory (NX/XD bit)**
+Intended to help (FW/OS/VMM) software build exploit mitigations by marking areas such as the stack and heap as non-executable.
+The bit helps implement a "W^X" (write xor execute) policy whereby memory can either be writable or executable but not both. In pre-x86-64 segmentation all data segments were non-executable, but no one used segmentation for this. 
+Any pages which have a PTE, PDE, or PDPTE with the XD = 1, are non executable. XD bits encountered earliest in the page table walk take precedence over later ones. 
+
+![](imgs/20250101195331.png)
+
+Attempts to execute from non-executable pages results in a Page Fault (#PF). Microsoft refers to the utilization of XD as Data Execution Prevention (DEP) or "Hardware DEP". "Software DEP" refers to MS'S Structured Exception Handler sanity checking ("SafeSEH") and has nothing to do with XD.
+How do we know if a particular processor support the NX bit ? 
+=> MSR bit 11 : Bit Enable IA32_EFER.NXE (R/W)
+
+**Interrupts & Debugging**
+IDT[3] is the Breakpoint Exception, and it's important enough for "INT3" to have a separate one byte opcode form (0xCC). INT3 is what debuggers are using when they say they are setting a "software breakpoint".
+When a debugger uses a software breakpoint, what it does is overwrite the first byte of the instruction at the specified address. It keeps its own list of which bytes it overwrote and where. When a breakpoint exception is received, it looks up the location, replaces the original byte and lets the instruction execute normally. Then typically it overwrites the first byte again so that the breakpoint will be hit if the address if executed again.
+
+**Hardware Breakpoints**
+There are 8 debug registers DR0-DR7:
+- DR0-3 : breakpoint linear address registers
+- DR4-5 : reserved (unused)
+- DR6 : Debug Status Register
+	- B0-B3 (breakpoint condition detected) flags: When B{0,1,2,3} bit is set, it means that the {0th,1th,2th,3th} condition specified in DR7 has been satisfied. The bits are set even if the DR7 says that condition is currently disabled. 
+	- BD (debug register access detected) flag: indicates that the next instruction will try to access the debug registers. This flag only enabled if GD (general detect) flag in DR7 is set. Thus this signals if someone else was trying to access the debug registers.
+	- BS (single step) flag: if set, the debug exception was triggered by single-step execution mode
+- DR7 : Debug Control Register
+	- L0-3 (local breakpoint enable) flags : Enables the DR0-3 breakpoint. These flags are cleared on task switches to ensure that ehy do not fire when dealing with a different task
+	- G0-3 (global breakpoint enable) flags : Enables the DR0-3 breakpoint. Does not get cleared on task switch, which is what makes it global.
+	- LE & GE (local and global exact breakpoint enable) flags : Not supported on x86-64 processors.
+	- GD (General Detect) flag: if set to 1, causes a debug exception (#DB, IDT[1]) prior to MOV instructions that access the debug registers. The flag is cleared when the actual exception occurs, so that the handler can access the debug register as needed. This can serve as a way of stopping other code from modifying the DRs
+	- R/W0-3 are interpreted as follows : 
+		- 00 : Break on instruction execution only
+		- 01 : Break on data writes only. 
+		- if CR4.DE == 1 then 10 then Break on I/O reads or writes
+		- if CR4.DE == 0 then 10 then Undefined
+		- 11 then Break on data reads or writes
+	- LEN0-4 bits specify what size the address stored in DR0-3 registers should be treated as : 
+		- 00: 1-byte
+		- 01: 2-bytes
+		- 10: 8 bytes (on x86-64 only)
+		- 11: 4-bytes
+
+Accessing the debug registers requires CPL == 0
+
+**Resume Flag (RF)**
+What happens when a Hardware Breakpoint Fires ?
+It fires IDT[1], a Debug Exception (#DB). When it is an execute breakpoint or general detect it's a fault. For other cases, it's a trap. That means if it was a break on write, the data is overwritten before the exception is generated. A handler which wants to show the before and after is responsible for keeping a copy of the before value. Instruction breakpoints are actually detected before the instruction executes . Therefore if the handler doesn't remove the breakpoint, and it just returned, the same exception would be raised over and over. This is where the Resumse Flag (RF) comes into play. 
+When the RF is set "The processor then ignores instruction breakpoints for the duration of the next instruction." "The processor then automatically clears this flag after the instruction returned to has been successfully executed". To set the flag, a debug interrupt handler must manipulate the RFLAGS stored on the stack and then use IRETQ (POPFQ does not transfer RF from the stack into RFLAGS) under any circumstances.
+
+**Trap Flag (TF)**
+When TF is 1, it causes a Debug Exception after every instruction. This is called "single-step" mode. Useful for capabilities such as "step into", but also for "step out" which just single-steps until it steps through a RET. If the debug exception is in response to "single stepping", it sets the DR6.BS flag. The processor clears the TF flag before calling the exception handler, so if the debugger wants to keep single-stepping it needs to set it again before returning.
+
+**Port I/O**
+In addition to transferring data to and from external memory, IA-32 processors can also transfer data to and from input/output ports (I/O ports). I/O ports are created in system hardware by circuity that decodes the control, data, and address pins on the processor. These I/O ports are then configured to communicate with peripheral devices. An I/O port can be an input port, an output port, or bidirectional port. 
+There are 2¹⁶ 8-bit IO ports, numbered 0-0xFFFF. Can combine 2 or 4 consecutive ports to achieve a 16 or 32 bit port. 32-bit ports should be aligned to addresses that are multiples of four (0,4,8,...). 
+We cannot use the IN/OUT instructions to access the ports unless we ahve sufficient privileges. There  is a 2 bit IOPL (I/O Privilege Level) field in RFLAGS. We can only perform IO if CPL <= IOPL.
